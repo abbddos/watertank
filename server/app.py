@@ -44,20 +44,26 @@ def receive_data():
     
     try: 
         level = data['level_pct']
-        new_entry = WaterLevel(level_pct = level)
-        db.session.add(new_entry)
-        db.session.commit() 
+        latest_entry = WaterLevel.query.order_by(WaterLevel.timestamp.desc()).first()
+        last_pump_status = latest_entry.pump_status if latest_entry else "off"
         
+        pump_command  = None
+        current_pump_status = last_pump_status
         
-        pump_command  = None 
-        if level <= 50:
+        if level <= 50 and last_pump_status != "on":
             pump_command = {"action":"on"}
-        elif level == 100:
+            current_pump_status = "on"
+            
+        elif level >= 100 and last_pump_status !="off":
             pump_command = {"action":"off"}
-            
-            
+            current_pump_status = "off"
+               
         if pump_command:
             mqtt_client.publish("water_tank/pump_control", json.dumps(pump_command))
+            
+        new_entry = WaterLevel(level_pct = level, pump_status = current_pump_status)
+        db.session.add(new_entry)
+        db.session.commit()
             
         return jsonify(new_entry.to_dict()), 200
     
